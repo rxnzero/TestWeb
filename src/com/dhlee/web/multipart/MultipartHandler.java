@@ -17,12 +17,15 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
 public class MultipartHandler extends HttpServlet {
-	private final String JSON_CONTENT_TYPE = "application/json";
-
+	private static final String JSON_CONTENT_TYPE = "application/json";
+	private static final String JSON_FIELD_NAME = "json-body";
+	private static final String FILE_GROUP_NAME = "image-file";
+	
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
@@ -32,8 +35,6 @@ public class MultipartHandler extends HttpServlet {
 			return;
 		}
 
-		final String jsonFieldName = "json-body";
-		final String fileGroupName = "image-file";
 		String jsonString = null;
 		// Create a factory for disk-based file items
 		DiskFileItemFactory factory = new DiskFileItemFactory();
@@ -48,6 +49,7 @@ public class MultipartHandler extends HttpServlet {
 		// Create a new file upload handler
 		ServletFileUpload upload = new ServletFileUpload(factory);
 		Map<String, String> fileMap = new HashMap<>();
+		InputStream fin = null;
 		try {
 			byte[] buffer = new byte[1024];
 			int read = 0;
@@ -62,7 +64,7 @@ public class MultipartHandler extends HttpServlet {
 //	                    File file = new File(getServletContext().getRealPath("/") + fileName);
 //	                    item.write(file);
 					// Handle the uploaded file
-					InputStream fin = item.getInputStream();
+					fin = item.getInputStream();
 					ByteArrayOutputStream fo = new ByteArrayOutputStream();
 					while ((read = fin.read(buffer)) > 0) {
 						fo.write(buffer, 0, read);
@@ -76,13 +78,14 @@ public class MultipartHandler extends HttpServlet {
 					System.out.println("File Contents [" + fileContents + "]");
 					System.out.println("[FILE]<--------------------------------------------------");
 					fileMap.put(fileName, fileContents);
+					fin.close();					
 				} else {
 					// This item is a regular form field
 					String fieldName = item.getFieldName();
 					String fieldValue = item.getString();
 					// Handle the regular form field
 					System.out.println("[FIELD] " + fieldName + " [" + fieldValue + "]");
-					if (JSON_CONTENT_TYPE.equalsIgnoreCase(item.getContentType()) && jsonFieldName.equals(fieldName)) {
+					if (JSON_CONTENT_TYPE.equalsIgnoreCase(item.getContentType()) || JSON_FIELD_NAME.equals(fieldName)) {
 						jsonString = fieldValue;
 					}
 				}
@@ -96,14 +99,34 @@ public class MultipartHandler extends HttpServlet {
 				if (jsonObject == null) {
 					jsonString = "{}";
 				} else {
-					JSONObject fileGroup = new JSONObject();
-					fileGroup.putAll(fileMap);
-					jsonObject.put(fileGroupName, fileGroup);
+					
+					if(fileMap.size() > 1) {
+						JSONArray files = new JSONArray();
+						for(Map.Entry<String, String> entry: fileMap.entrySet()) {
+							JSONObject file = new JSONObject();
+							file.put("fileName", entry.getKey());
+							file.put("fileContents", entry.getValue());
+							files.add(file);
+						}
+						jsonObject.put(FILE_GROUP_NAME, files);
+					}
+					else {
+						JSONObject fileGroup = new JSONObject();
+						for(Map.Entry<String, String> entry: fileMap.entrySet()) {
+							fileGroup.put("fileName", entry.getKey());
+							fileGroup.put("fileContents", entry.getValue());
+						}
+						jsonObject.put(FILE_GROUP_NAME, fileGroup);
+						jsonString = jsonObject.toJSONString();
+					}
+					
+					
 					jsonString = jsonObject.toJSONString();
 				}
 			}
 			// Send a success response
 			response.setContentType("application/json");
+			response.setCharacterEncoding("UTF-8");
 			PrintWriter out = response.getWriter();
 			out.println(jsonString);
 		} catch (Exception e) {
@@ -111,6 +134,13 @@ public class MultipartHandler extends HttpServlet {
 			e.printStackTrace();
 			response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
 					"Failed to process request: " + e.getMessage());
+		}
+		finally {
+			if(fin != null) {
+				try { fin.close(); } catch(Exception ex) { 
+						// empty
+				}
+			}
 		}
 	}
 }
