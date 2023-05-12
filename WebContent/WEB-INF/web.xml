@@ -13,4 +13,18 @@
   	<servlet-name>multipart</servlet-name>
   	<url-pattern>/multipart</url-pattern>
   </servlet-mapping>
+  
+  <servlet>
+    <description/>
+    <servlet-name>asyncServlet</servlet-name>
+    <servlet-class>com.dhlee.web.async.AsyncServlet</servlet-class>
+    <init-param>
+    	<param-name>com.ibm.ws.webcontainer.async-supported</param-name>
+    	<param-value>true</param-value>
+    </init-param>
+	</servlet>
+	<servlet-mapping>
+    	<servlet-name>asyncServlet</servlet-name>
+    	<url-pattern>/async</url-pattern>
+	</servlet-mapping>
 </web-app>
